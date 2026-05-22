@@ -1,24 +1,28 @@
 {
-    "name": ":vendor_slug/:package_slug",
-    "description": ":package_description",
+    "name": "budiardianata/plain-sqs-driver",
+    "description": "Laravel package to handle plain SQS queue.",
     "keywords": [
-        ":vendor_name",
         "laravel",
-        ":package_slug"
+        "plain-sqs-driver",
+        "AWS SQS"
     ],
-    "homepage": "https://github.com/:vendor_slug/:package_slug",
+    "homepage": "https://github.com/budiardianata/plain-sqs-driver",
     "license": "MIT",
     "authors": [
         {
-            "name": ":author_name",
-            "email": "author@domain.com",
+            "name": "Budi Ardianata",
+            "email": "budiardianata@windowslive.com",
             "role": "Developer"
         }
     ],
     "require": {
         "php": "^8.4",
         "spatie/laravel-package-tools": "^1.16",
-        "illuminate/contracts": "^11.0||^12.0||^13.0"
+        "illuminate/contracts": "^11.0||^12.0||^13.0",
+        "illuminate/support": "^11.0||^12.0||^13.0",
+        "illuminate/queue": "^11.0||^12.0||^13.0",
+        "illuminate/bus": "^11.0||^12.0||^13.0",
+        "aws/aws-sdk-php": "^3.250"
     },
     "require-dev": {
         "laravel/pint": "^1.14",
@@ -30,19 +34,16 @@
         "pestphp/pest-plugin-laravel": "^4.0",
         "phpstan/extension-installer": "^1.4",
         "phpstan/phpstan-deprecation-rules": "^2.0",
-        "phpstan/phpstan-phpunit": "^2.0",
-        "spatie/laravel-ray": "^1.35"
+        "phpstan/phpstan-phpunit": "^2.0"
     },
     "autoload": {
         "psr-4": {
-            "VendorName\\Skeleton\\": "src/",
-            "VendorName\\Skeleton\\Database\\Factories\\": "database/factories/"
+            "Budiardianata\\PlainSqsDriver\\": "src/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "VendorName\\Skeleton\\Tests\\": "tests/",
-            "Workbench\\App\\": "workbench/app/"
+            "Budiardianata\\PlainSqsDriver\\Tests\\": "tests/"
         }
     },
     "scripts": {
@@ -63,11 +64,8 @@
     "extra": {
         "laravel": {
             "providers": [
-                "VendorName\\Skeleton\\SkeletonServiceProvider"
-            ],
-            "aliases": {
-                "Skeleton": "VendorName\\Skeleton\\Facades\\Skeleton"
-            }
+                "Budiardianata\\PlainSqsDriver\\PlainSqsDriverServiceProvider"
+            ]
         }
     },
     "minimum-stability": "dev",
