@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Budiardianata\PlainSqsDriver;
 
+use Budiardianata\PlainSqsDriver\Contract\PlainSqsHandler;
 use Budiardianata\PlainSqsDriver\Job\PlainSqsDispatcherJob;
 use DateInterval;
 use DateTimeInterface;
@@ -12,10 +13,18 @@ use Illuminate\Queue\Jobs\SqsJob;
 use Illuminate\Queue\SqsQueue;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Str;
+use InvalidArgumentException;
 use JsonException;
 
 class PlainSqsQueue extends SqsQueue
 {
+    /**
+     * Buffered SQS messages from a single receiveMessage call.
+     *
+     * @var array<int, array<string, mixed>>
+     */
+    private array $messagesBuffer = [];
+
     /**
      * Pop the next job off of the queue.
      *
@@ -27,19 +36,30 @@ class PlainSqsQueue extends SqsQueue
     {
         $queue = $this->getQueue($queue);
 
-        $response = $this->sqs->receiveMessage([
-            'QueueUrl' => $queue,
-            'AttributeNames' => ['ApproximateReceiveCount'],
-            'MaxNumberOfMessages' => 1,
-            'MessageAttributeNames' => ['All'],
-        ]);
+        if ($this->messagesBuffer === []) {
+            $response = $this->sqs->receiveMessage([
+                'QueueUrl' => $queue,
+                'AttributeNames' => ['ApproximateReceiveCount'],
+                'MaxNumberOfMessages' => $this->getMaxNumberOfMessages(),
+                'WaitTimeSeconds' => $this->getWaitTimeSeconds(),
+                'MessageAttributeNames' => ['All'],
+            ]);
 
-        if (isset($response['Messages']) && count($response['Messages']) > 0) {
+            $this->messagesBuffer = $response['Messages'] ?? [];
+        }
+
+        if ($this->messagesBuffer !== []) {
             $queueId = explode('/', $queue);
             $queueId = array_pop($queueId);
             $class = $this->getClassName($queueId);
 
-            $response = $this->modifyPayload($response['Messages'][0], $class);
+            $message = array_shift($this->messagesBuffer);
+
+            if (! is_array($message)) {
+                return null;
+            }
+
+            $response = $this->modifyPayload($message, $class);
 
             return new SqsJob($this->container, $this->sqs, $response, $this->connectionName, $queue);
         }
@@ -85,10 +105,31 @@ class PlainSqsQueue extends SqsQueue
         ], JSON_THROW_ON_ERROR);
     }
 
+    private function getMaxNumberOfMessages(): int
+    {
+        $configured = Config::get('plain-sqs.max_number_of_messages', 1);
+
+        if (! is_numeric($configured)) {
+            return 1;
+        }
+
+        return max(1, min(10, (int) $configured));
+    }
+
+    private function getWaitTimeSeconds(): int
+    {
+        $configured = Config::get('plain-sqs.wait_time_seconds', 2);
+        if (! is_numeric($configured)) {
+            return 1;
+        }
+
+        return max(0, min(20, (int) $configured));
+    }
+
     private function getClass($queue = null): string
     {
         if (! $queue) {
-            return Config::get('plain-sqs.default-handler');
+            return $this->getClassName('default');
         }
 
         $queueId = explode('/', $queue);
@@ -99,9 +140,24 @@ class PlainSqsQueue extends SqsQueue
 
     private function getClassName(string $queueId): string
     {
-        return (array_key_exists($queueId, Config::get('plain-sqs.handlers')))
-            ? Config::get('plain-sqs.handlers')[$queueId]
-            : Config::get('plain-sqs.default-handler');
+        $handlers = Config::get('plain-sqs.handlers', []);
+        $class = (array_key_exists($queueId, $handlers))
+            ? $handlers[$queueId]
+            : ($handlers['default'] ?? null);
+
+        if (! is_string($class) || ! class_exists($class)) {
+            throw new InvalidArgumentException('Invalid plain SQS handler class configured for queue: '.$queueId);
+        }
+
+        if (! is_a($class, PlainSqsHandler::class, true)) {
+            throw new InvalidArgumentException(sprintf(
+                'Configured plain SQS handler [%s] must implement [%s].',
+                $class,
+                PlainSqsHandler::class
+            ));
+        }
+
+        return $class;
     }
 
     /**
